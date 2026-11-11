@@ -178,6 +178,18 @@ details.settings summary{cursor:pointer;font-weight:600}
 .pr.safe .v{color:var(--good)}
 .plan-tbl tr.sel td{background:var(--accent-soft);font-weight:600}
 .plan-tbl td.zero{color:var(--good)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.md-try{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;background:var(--sunk);border-radius:10px;padding:10px 12px}
+.md-try input{width:80px;text-align:right}
+.md-xres{font-weight:600}
+.gchip{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--band-1);color:var(--ink)}
+.gchip.g0{background:var(--band-s);color:var(--accent-ink)}
+.gchip.g1{background:var(--band-a);color:var(--accent-ink)}
+.gchip.low{background:var(--bad-soft);color:var(--bad)}
+.pr.warn{border-color:var(--warn);background:var(--warn-soft)}
+.pr.warn .v{color:var(--warn)}
+.pr.bad{border-color:var(--bad);background:var(--bad-soft)}
+.pr.bad .v{color:var(--bad)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-size:13px;font-weight:500;z-index:20;max-width:calc(100% - 32px)}
 .drop{border:1.5px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);font-size:13px}
 .drop.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
@@ -246,6 +258,31 @@ details.settings summary{cursor:pointer;font-weight:600}
       </div>
       <div class="moves" id="moves"></div>
     </div>
+  </section>
+
+  <section class="card plan" aria-labelledby="midTitle">
+    <div>
+      <h2 id="midTitle">분기 중간 점검</h2>
+      <div class="muted" style="font-size:12.5px">지금까지의 환자수를 넣으면, 남은 기간 하루 환자수에 따라 이번 분기 등급이 어떻게 될지 보여줘요.</div>
+    </div>
+    <div class="plan-grid">
+      <div class="plan-inputs">
+        <div class="pf"><label for="mdAsOf">집계 기준일</label><input type="date" id="mdAsOf" style="text-align:left"><span class="unit">까지</span></div>
+        <div class="pf"><label for="mdMode" class="sr">입력 방식</label><select id="mdMode" style="grid-column:1"><option value="avg">평균 환자수</option><option value="sum">재원일수 합</option></select><input type="number" min="0" step="0.01" id="mdVal" class="num"><span class="unit" id="mdUnit">명</span></div>
+        <div class="pf-note muted" id="mdDays" style="margin-left:0"></div>
+        <div class="pf-note muted" id="mdSumNote" style="margin-left:0"></div>
+      </div>
+      <div class="plan-result" id="mdOut"></div>
+    </div>
+    <div class="md-try" id="mdTry" hidden>
+      <label for="mdX">남은 기간 하루 평균</label>
+      <input type="number" min="0" step="0.1" id="mdX" class="num">
+      <span>명이면</span>
+      <span id="mdXRes" class="md-xres"></span>
+      <button class="btn sm" id="mdApply">이 값을 예상 환자수로 적용</button>
+    </div>
+    <div class="tbl-wrap plan-tbl"><table id="mdTable" style="min-width:520px"><thead></thead><tbody></tbody></table></div>
+    <div class="muted" style="font-size:12px">간호사수는 위 명단의 이번 산정기간 전체 값(예정된 퇴사·휴직 포함)을 써요. 재원환자수는 매일 자정 기준이 아니라 심평원 기준대로 입원 당일 포함, 퇴원 환자 제외로 세어 주세요.</div>
   </section>
 
   <section class="card plan" aria-labelledby="planTitle">
@@ -338,7 +375,7 @@ function sample(){
   const hires=['2024-08-01','2017-06-05','2016-09-01','2022-08-01','2025-07-01','2025-07-01','2021-07-19','2019-07-01','2023-03-09','2016-05-16','2023-07-03','2020-03-23','2020-01-06','2025-07-01','2016-03-14','2019-06-10','2017-06-05','2025-03-04','2024-12-09','2018-02-01','2019-03-18','2009-04-01','2025-03-04','2021-05-17'];
   const nurses=hires.map((h,i)=>({id:'예시'+String(i+1).padStart(3,'0'),name:'간호사 '+String(i+1).padStart(2,'0'),type:'정규직',fte:1,hire:h,leave:'',absences:[],override:null}));
   nurses[4].absences=[{from:'2026-12-01',to:'2027-03-31',memo:'출산휴가'}];
-  return {units:[{name:'ICU2 (예시)',pMode:'avg',pAvg:10.13,pSum:'',beds:12,newBeds:16,nurses}],cur:0,period:'2026-09-15',grades:DEFAULT_GRADES.map(g=>({...g})),sample:true};
+  return {units:[{name:'ICU2 (예시)',pMode:'avg',pAvg:10.13,pSum:'',beds:12,newBeds:16,mid:{asOf:'2026-11-10',mode:'avg',val:10.4},nurses}],cur:0,period:'2026-09-15',grades:DEFAULT_GRADES.map(g=>({...g})),sample:true};
 }
 
 /* ---------- state ---------- */
@@ -557,7 +594,68 @@ function renderPlan(){
   tb.tHead.innerHTML=`<tr><th>가동률</th><th class="r">평균 환자수</th><th class="r">필요 간호사수</th><th class="r">커트라인 추가</th><th class="r">권장 추가</th></tr>`;
   tb.tBodies[0].innerHTML=occs.map(o=>{ const p=r2(nb*o/100), a=addNeeded(p,c.N,g.max), s=addNeeded(p,c.N,r2(g.max-0.02)); return `<tr class="${o===Math.round(occ)?'sel':''}"><td class="num">${o}%${o===Math.round(occ)?' · 선택':''}</td><td class="r num">${fmt(p)}</td><td class="r num">${fmt(minNFor(p,g.max))}</td><td class="r num ${a===0?'zero':''}">${a===0?'추가 없음':'+'+a+'명'}</td><td class="r num">${s===0?'—':'+'+s+'명'}</td></tr>`; }).join('');
 }
-const _renderSummary=renderSummary; renderSummary=function(){ _renderSummary(); renderPlan(); };
+/* ---------- 분기 중간 점검 ---------- */
+function todayKST(){ return Math.floor((Date.now()+9*36e5)/DAY); }
+function gchip(P,N){ const r=t2(P/N), i=gradeIndex(r), g=S.grades[i]; const cls=g.max==null?'low':i===0?'g0':i===1?'g1':''; return `<span class="gchip ${cls}">${esc(gName(g))}</span>`; }
+function maxTotalFor(N,max,pd){ const Pa=maxPFor(N,max); let T=Math.ceil((Pa+0.005)*pd-1e-7)-1; while(r2((T+1)/pd)<=Pa) T++; while(T>=0 && r2(T/pd)>Pa) T--; return T; }
+function midState(){
+  const u=U(), c=calc(u); u.mid=u.mid||{};
+  let asOf=dn(u.mid.asOf); if(asOf==null||asOf<c.ps||asOf>c.pe) asOf=Math.min(c.pe,Math.max(c.ps,todayKST()-1));
+  const el=asOf-c.ps+1, rem=c.pe-asOf, v=u.mid.val;
+  const has=v!=null&&v!=='';
+  const sum=!has?null: u.mid.mode==='sum'? Math.round(+v) : Math.round(+v*el);
+  return {u,c,asOf,el,rem,sum};
+}
+function renderMid(){
+  const {u,c,asOf,el,rem,sum}=midState();
+  const ai=$('mdAsOf'); ai.min=c.p.start; ai.max=c.p.end; if(document.activeElement!==ai) ai.value=ds(asOf);
+  $('mdMode').value=u.mid.mode==='sum'?'sum':'avg';
+  $('mdUnit').textContent=u.mid.mode==='sum'?'일':'명';
+  $('mdVal').step=u.mid.mode==='sum'?'1':'0.01';
+  if(document.activeElement!==$('mdVal')) $('mdVal').value=u.mid.val??'';
+  $('mdDays').textContent=`${fmtK(c.p.start)} ~ ${fmtK(ds(asOf))} · ${el}일 지남 · 남은 기간 ${rem}일`;
+  const out=$('mdOut'), tb=$('mdTable');
+  if(sum==null||!(c.N>0)){ $('mdSumNote').textContent=''; out.innerHTML=`<div class="pr"><span class="k">입력 필요</span><span class="d">집계 기준일까지의 평균 환자수(또는 재원일수 합)를 넣으면 남은 기간 시나리오가 나와요.</span></div>`; tb.tHead.innerHTML=''; tb.tBodies[0].innerHTML=''; $('mdTry').hidden=true; return; }
+  const avgSoFar=sum/el;
+  $('mdSumNote').textContent = u.mid.mode==='sum' ? `지금까지 평균 ${fmt(avgSoFar)}명` : `지금까지 재원일수 합 약 ${sum.toLocaleString('ko-KR')}일`;
+  const finalP=x=>r2((sum+x*rem)/c.pd);
+  const beds=+u.beds||0;
+  // 현재 속도
+  const paceP=finalP(avgSoFar);
+  let html=`<div class="pr main"><span class="k">지금 속도(하루 ${fmt(avgSoFar,1)}명)로 가면</span><span class="v">${gName(S.grades[gradeIndex(t2(paceP/c.N))])}</span><span class="d">최종 평균 ${fmt(paceP)}명 · 비율 ${fmt(t2(paceP/c.N))}</span></div>`;
+  // 등급별 상한
+  const gs=S.grades.filter(g=>g.max!=null);
+  const shown=[]; const pi=gradeIndex(t2(paceP/c.N));
+  for(let i=Math.max(0,Math.min(pi,gs.length)-2); i<gs.length && shown.length<3; i++) shown.push(gs[i]);
+  for(const g of shown){
+    const T=maxTotalFor(c.N,g.max,c.pd), R=T-sum;
+    let v,d,cls='';
+    if(rem===0){ v=R>=0?'유지':'미달'; d='산정기간이 끝났어요'; cls=R>=0?'safe':'bad'; }
+    else if(R<0){ v='어려워요'; d='남은 기간 환자가 0명이어도 넘어요'; cls='bad'; }
+    else if(beds && R>=rem*beds){ v='유지'; d=`${beds}병상 만석이어도 유지돼요`; cls='safe'; }
+    else { const x=R/rem; v=`${fmt(Math.floor(x*10)/10,1)}명 이하`; d=`남은 ${rem}일 재원일수 합 ${R.toLocaleString('ko-KR')}일 이하`; cls= x<avgSoFar-0.5?'warn':''; }
+    html+=`<div class="pr ${cls}"><span class="k">${esc(gName(g))} 되려면 하루 평균</span><span class="v num">${v}</span><span class="d">${d}</span></div>`;
+  }
+  out.innerHTML=html;
+  // 직접 넣어보기
+  $('mdTry').hidden=rem===0;
+  const xi=$('mdX'); if(u.mid.x==null) u.mid.x=Math.round(avgSoFar*10)/10;
+  if(document.activeElement!==xi) xi.value=u.mid.x;
+  const xp=finalP(+u.mid.x||0);
+  $('mdXRes').innerHTML=`최종 평균 <span class="num">${fmt(xp)}</span>명 · 비율 <span class="num">${fmt(t2(xp/c.N))}</span> → ${gchip(xp,c.N)}`;
+  // 표
+  const ctr=Math.round(avgSoFar); let lo=Math.max(0,ctr-4), hi=ctr+4; if(beds){ hi=Math.min(hi,beds); lo=Math.max(0,Math.min(lo,hi-8)); }
+  tb.tHead.innerHTML=`<tr><th>남은 ${rem}일 하루 환자수</th><th class="r">분기 평균 환자수</th><th class="r">간호사 1인당</th><th>예상 등급</th></tr>`;
+  let rows=''; for(let x=lo;x<=hi;x++){ const p=finalP(x); rows+=`<tr class="${x===ctr?'sel':''}"><td class="num">${x}명${x===ctr?' · 지금 속도':''}${beds&&x===beds?' · 만석':''}</td><td class="r num">${fmt(p)}</td><td class="r num">${fmt(t2(p/c.N))}</td><td>${gchip(p,c.N)}</td></tr>`; }
+  tb.tBodies[0].innerHTML=rows;
+}
+$('mdAsOf').addEventListener('change',e=>{ const m=U().mid=U().mid||{}; m.asOf=e.target.value; save(); renderMid(); });
+$('mdMode').addEventListener('change',e=>{ const st=midState(); const m=st.u.mid; const prev=m.mode==='sum'?'sum':'avg'; m.mode=e.target.value; if(st.sum!=null && prev!==m.mode) m.val= m.mode==='sum'? st.sum : r2(st.sum/st.el); save(); renderMid(); });
+$('mdVal').addEventListener('change',e=>{ const m=U().mid=U().mid||{}; m.val=e.target.value===''?null:+e.target.value; m.x=null; S.sample=false; save(); renderMid(); });
+$('mdX').addEventListener('input',e=>{ U().mid.x=e.target.value===''?0:+e.target.value; save(); renderMid(); });
+$('mdApply').onclick=()=>{ const st=midState(); if(st.sum==null) return; const p=r2((st.sum+(+st.u.mid.x||0)*st.rem)/st.c.pd); st.u.pMode='avg'; st.u.pAvg=p; save(); renderAll(); toast(`예상 평균 환자수를 ${fmt(p)}명으로 바꿨어요`); };
+
+const _renderSummary=renderSummary; renderSummary=function(){ _renderSummary(); renderMid(); renderPlan(); };
 [['plBeds','beds'],['plNew','newBeds'],['plOcc','occ']].forEach(([id,f])=>$(id).addEventListener('change',e=>{ const v=e.target.value; U()[f]= v===''?null:+v; save(); renderPlan(); }));
 $('plGrade').onchange=e=>{ U().planGrade=e.target.value; save(); renderPlan(); };
 
